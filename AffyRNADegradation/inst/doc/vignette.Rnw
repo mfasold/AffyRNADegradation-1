@@ -1,0 +1,235 @@
+\documentclass{article}
+%\VignetteIndexEntry{AffyRNADegradation Example}
+\usepackage{amsmath}
+\usepackage{amscd}
+\usepackage[tableposition=top]{caption}
+\usepackage{ifthen}
+\usepackage[utf8]{inputenc}
+\usepackage{enumerate}
+\usepackage{hyperref}
+\usepackage[authoryear,round]{natbib}
+
+\newcommand{\Rfunction}[1]{{\texttt{#1}}}
+\newcommand{\Robject}[1]{{\texttt{#1}}}
+\newcommand{\Rpackage}[1]{{\textit{#1}}}
+
+\begin{document}
+
+\title{The AffyRNADegradation Package}
+\author{Mario Fasold}
+\maketitle
+
+Affymetrix 3' expression arrays employ a specific experimental
+protocol and a specific probe design that allows assessment of RNA integrity
+based on probe signal data. Problems of RNA integrity are primarily
+governed to the degradation of the target transcripts. We have shown
+in \cite{Fasold2012a} that 
+%\begin{enumerate}
+\begin{enumerate}[(i)]%for capital roman numbers.
+\item degradation leads to a probe positional bias that needs to be
+  corrected in order to compare expression of samples with varying
+  degree of degradation, and
+\item it is possible to estimate a robust and accurate measure of RNA
+  integrity from the probe signals that, for example, can be used to study
+  degradation within the large number of available microarray data.
+\end{enumerate}
+The rationale and further analysis are described in the accompanying
+publication by Fasold and Binder. We here show how to utilize this
+package for both problems.
+
+\section{Basic RNA Degradation Analysis}
+
+We here show how to use the package for the analysis of RNA
+degradation. Let us first load exemplar data provided by the
+\Rpackage{AmpAffyExample} package into the environment.
+<<>>=
+library(AffyRNADegradation)
+library(AmpAffyExample)
+data(AmpData)
+AmpData
+@
+ 
+Every transcript is measured by a set of 11-16 probes. The log-average
+intensity difference between probes located closer to the 3' end of
+the target transcripts and those located further away constitutes the 
+probe positional bias. It can be visualized using the {\it tongs plot}.
+<<label=plotTongs,include=FALSE>>=
+tongs <- GetTongs(AmpData, chip.idx = 4) 
+PlotTongs(tongs)
+@
+\begin{figure}
+\begin{center}
+<<label=plotTongs,fig=TRUE,echo=FALSE>>=
+<<plotTongs>>
+@
+\end{center}
+\caption{The tongs plot shows that the intensity difference between 3'
+  and 5' probes increases with $\Sigma=\langle \log I
+  \rangle$. $\langle \rangle$ here denotes either averaging over all probes within
+  the probeset, or averaging over the 3' or 5' subset of probes in $\Sigma_{subset}$.}
+\label{fig:tongs}
+\end{figure}
+Figure~\ref{fig:tongs} shows that the bias relates to the expression
+level of the transcripts. As this can vary from sample to sample,
+it must be considered in estimating of RNA degradation. 
+
+The function \Rfunction{RNADegradation} performs the basal analysis of RNA
+degradation based on raw probe intensities stored in an AffyBatch
+object. The result is an \Robject{AffyDegradationBatch} object that contains the
+corrected probe intensities as well as several statistical parameters.
+<<correctAffy>>=
+rna.deg <- RNADegradation(AmpData, location.type = "index")
+@
+
+We can visualize the probe positional bias using the \Rfunction{PlotDx} function.
+<<label=plotDx,include=FALSE>>=
+plotDx(rna.deg)
+@
+\begin{figure}
+\begin{center}
+<<label=fig1,fig=TRUE,echo=FALSE>>=
+<<plotDx>>
+@
+\end{center}
+\caption{Probe degradation plot. The points show the average probe
+  intensity of expressed genes for each index $x=1,..11$ relative to
+  the average intensity at position $x=1$. The lines are a
+  fitted decay function.}
+\label{fig:one}
+\end{figure}
+Figure~\ref{fig:one} shows the results. Different degradation
+between different samples are observed. 
+
+To access the parameter $d$, which provides a robust, sample-wise measure for the
+degree of RNA degradation, one can use the function
+<<RnaIntegrityD>>=
+d(rna.deg)
+@
+
+\section{Using Absolute Probe Locations}
+
+Instead of using the probe index within the probeset as argument of
+the degradation degree, one can use the actual probe locations within
+the transcript. We have pre-computed the distance of each probe to the
+3' end of its target transcript for all Affymetrix 3' expression
+arrays. These probe location files are available under the URL
+\url{http://www.izbi.uni-leipzig.de/downloads_links/programs/rna_integrity.php}.
+
+In order to perform the analysis and correction using absolute
+probe locations, one must first download the probe location file for
+the used chip type. You can then start the analysis using
+\Rfunction{RNADegradation}, as above, but selecting
+\texttt{absolute} as \texttt{location.type}.  The parameter
+\texttt{location.file.dir} must specify the download directory of the
+probe location file. 
+
+% <<correctAffyAbsolute, results=hide, eval=FALSE>>=
+% # do not run as additional file needed
+% rna.deg = RNADegradation(AmpData, location.type = "absolute", location.file.dir = "[SOME_DIR]")
+% @ 
+
+\section{Creating Custom Probe Location Files}
+
+It is possible to use custom probe locations, for example if one
+wishes to analyze custom built microarrays or if one relies on
+alternative probe annotations. For this, one has to create a probe
+location file similar to the pre-built ones used in the previous section.
+
+Here is how to generate such a file. First, create a data frame with
+the name \texttt{probeDists} containing the five columns
+\texttt{Probe.Set.Name}, \texttt{Probe.X}, \texttt{Probe.Y},
+\texttt{Probe.Distance} and
+\texttt{Target.Length}. \texttt{Probe.Set.Name} is of class character
+and contains the Affymetrix probe set id. The remaining variables are
+of class integer. 
+
+\texttt{Probe.X} and \texttt{Probe.Y} denote the
+coordinates of the probe on the microarray. These are important because
+the coordinates are used to map the probes to the AffyBatch object
+using the \Rfunction{xy2indices} function from the \Rpackage{affy}
+package. This implies that the ordering of the table rows can be of
+any kind. It is however important that this information can be mapped
+to every probe pair in the AffyBatch intensity array (as for example shown
+in the \Rfunction{affy::pm} function). 
+
+\texttt{Probe.Distance} contains the
+probe location: the number of nucleotides counted between the
+designated 3’-end of the transcript and the first (i.e. nearest) base
+of the 25meric probe sequence. The last column \texttt{Target.Length}
+contains the length of the target in base bairs - it is not used in
+this package and can be set to any value. The following table
+shows an example of the \texttt{probeDists} data frame:
+
+% latex table generated in R 2.15.0 by xtable 1.7-0 package
+% Wed Sep 26 15:05:00 2012
+\begin{table}[ht]
+\begin{center}
+\begin{tabular}{rlrrrr}
+  \hline
+ & Probe.Set.Name & Probe.X & Probe.Y & Probe.Distance & Target.Length \\ 
+  \hline
+1 & 1007\_s\_at & 467 & 181 & 608 & 3938 \\ 
+  2 & 1007\_s\_at & 531 & 299 & 495 & 3938 \\ 
+  3 & 1007\_s\_at &  86 & 557 & 426 & 3938 \\ 
+  ...  & ... &  ... & ... & ... & .. \\ 
+   \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+This table is then stored in an R binary object file. The
+filename must be set to the chip type identifier as given by the
+\Rfunction{affy::cdfName} function with the file ending \texttt{.Rd}:
+
+<<saveProbeLocations, results=hide, eval=FALSE>>=
+filename = paste(cdfName(AmpData), ".Rd", sep="")
+save(probeDists, file = filename)
+@ 
+
+To use the custom probe locations, start the analysis using
+\Rfunction{RNADegradation}, as above with
+\texttt{location.type=absolute} and \texttt{location.file.dir} set to
+the directory containing the custom probe location file.
+
+
+
+
+\section{Correction of the Bias and Integration into the Microarray Calibration Pipeline}
+
+The correction of the probe positional bias is performed within the
+\Rfunction{Affy\-RNA\-Degradation} function. The result is a new
+\Robject{AffyBatch} object with corrected probe level intensities. It
+can be accessed using the \Rfunction{afbatch} function
+<<correctAffy, results=hide>>=
+afbatch(rna.deg)
+@ 
+It is possible to replace the original raw data with this data
+corrected for probe positional bias, before performing further
+microarray normalization and summarization (e.g. using RMA).
+
+Alternatively, the correction can be performed after probe-level
+normalization. The following example shows how to first apply the VSN
+normalization method, then correct for probe positional bias to
+finally get summarized expression measures
+<<vsnCorrect, results=hide, eval = FALSE>>=
+library(vsn)
+affydata.vsn <- do.call(affy:::normalize, c(alist(AmpData, "vsn"), NULL))
+affydata.vsn <- afbatch(RNADegradation(affydata.vsn))
+expr <- computeExprSet(affydata.vsn, summary.method="medianpolish", pmcorrect.method="pmonly")
+@
+
+\section{Citing AffyRNADegradation}
+Please cite \citep{Fasold2012b} when using the package.
+
+
+\section{Details}
+This document was written using:
+
+<<details>>=
+sessionInfo()
+@
+
+\bibliographystyle{plainnat}
+\bibliography{AffyRNADegradation}
+
+\end{document}

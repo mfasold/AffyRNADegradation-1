@@ -1,0 +1,11 @@
+citEntry(entry = "Article",
+         author = "Mario Fasold and Hans Binder",
+         title = "AffyRNADegradation: Control and correction of RNA quality effects in GeneChip expression data",
+         journal = "Bioinformatics",
+         volume = "29", 
+         number = "1", 
+         pages = "129-131", 
+         year = "2013", 
+         doi = "http://dx.doi.org/10.1093/bioinformatics/bts629",
+         textVersion = "Fasold, M., and Binder, H. AffyRNADegradation: control and correction of RNA quality effects in GeneChip expression data. Bioinformatics (2013) 29(1): 129-131."
+)
